@@ -33,25 +33,80 @@ export default function Home() {
 
     const today = new Date();
 
+    const format = (d: Date) =>
+      `${d.getMonth() + 1}月${d.getDate()}日`;
+
+    // 今日系
     if (raw.includes("今日")) {
-      date = `${today.getMonth() + 1}月${today.getDate()}日`;
+      date = format(today);
       raw = raw.replace("今日", "");
     }
 
     if (raw.includes("明日")) {
       const d = new Date();
       d.setDate(today.getDate() + 1);
-      date = `${d.getMonth() + 1}月${d.getDate()}日`;
+      date = format(d);
       raw = raw.replace("明日", "");
     }
 
     if (raw.includes("明後日")) {
       const d = new Date();
       d.setDate(today.getDate() + 2);
-      date = `${d.getMonth() + 1}月${d.getDate()}日`;
+      date = format(d);
       raw = raw.replace("明後日", "");
     }
 
+    // 1〜10日後
+    for (let i = 1; i <= 10; i++) {
+      if (raw.includes(`${i}日後`)) {
+        const d = new Date();
+        d.setDate(today.getDate() + i);
+        date = format(d);
+        raw = raw.replace(`${i}日後`, "");
+      }
+    }
+
+    // 来週
+    if (raw.includes("来週")) {
+      const d = new Date();
+      d.setDate(today.getDate() + 7);
+      date = format(d);
+      raw = raw.replace("来週", "");
+    }
+
+    // 来月
+    if (raw.includes("来月")) {
+      const d = new Date();
+      d.setMonth(today.getMonth() + 1);
+      date = format(d);
+      raw = raw.replace("来月", "");
+    }
+
+    // ○年○月○日
+    const fullDateMatch = raw.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+    if (fullDateMatch) {
+      const [, y, m, d] = fullDateMatch;
+      date = `${m}月${d}日`;
+      raw = raw.replace(fullDateMatch[0], "");
+    }
+
+    // ○月○日
+    const monthDayMatch = raw.match(/(\d{1,2})月(\d{1,2})日/);
+    if (monthDayMatch) {
+      const [, m, d] = monthDayMatch;
+      date = `${m}月${d}日`;
+      raw = raw.replace(monthDayMatch[0], "");
+    }
+
+    // 4/20
+    const slashMatch = raw.match(/\d{1,2}\/\d{1,2}/);
+    if (slashMatch) {
+      const [m, d] = slashMatch[0].split("/");
+      date = `${m}月${d}日`;
+      raw = raw.replace(slashMatch[0], "");
+    }
+
+    // 時間系
     if (raw.includes("朝")) {
       time = "09:00";
       raw = raw.replace("朝", "");
@@ -65,13 +120,6 @@ export default function Home() {
     if (raw.includes("夜")) {
       time = "20:00";
       raw = raw.replace("夜", "");
-    }
-
-    const dateMatch = raw.match(/\d{1,2}\/\d{1,2}/);
-    if (dateMatch) {
-      const [m, d] = dateMatch[0].split("/");
-      date = `${m}月${d}日`;
-      raw = raw.replace(dateMatch[0], "");
     }
 
     const timeMatch = raw.match(/\d{1,2}:\d{2}/);
@@ -106,8 +154,7 @@ export default function Home() {
   };
 
   const handleDelete = (index: number) => {
-    const newList = list.filter((_, i) => i !== index);
-    setList(newList);
+    setList(list.filter((_, i) => i !== index));
   };
 
   return (
@@ -118,7 +165,7 @@ export default function Home() {
         className="w-80 rounded border bg-white px-3 py-2 text-black"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="例: 明日 夜 バイト"
+        placeholder="例: 明日夜バイト"
       />
 
       <button
@@ -135,17 +182,11 @@ export default function Home() {
             {preview.date} {preview.title} {preview.time}
           </p>
 
-          <button
-            onClick={handleConfirm}
-            className="bg-green-500 px-2 m-1"
-          >
+          <button onClick={handleConfirm} className="bg-green-500 px-2 m-1">
             OK
           </button>
 
-          <button
-            onClick={() => setPreview(null)}
-            className="bg-red-500 px-2 m-1"
-          >
+          <button onClick={() => setPreview(null)} className="bg-red-500 px-2 m-1">
             キャンセル
           </button>
         </div>
@@ -153,17 +194,14 @@ export default function Home() {
 
       <div>
         {list.map((item, index) => (
-          <div
-            key={index}
-            className="flex items-center justify-between w-80 border p-2"
-          >
+          <div key={index} className="flex gap-2 items-center">
             <p>
               {item.date} {item.title} {item.time}
             </p>
 
             <button
               onClick={() => handleDelete(index)}
-              className="bg-red-500 px-2 py-1"
+              className="bg-red-500 px-2"
             >
               削除
             </button>
