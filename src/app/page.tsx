@@ -1,4 +1,4 @@
-　"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -19,7 +19,9 @@ function formatJP(date: Date, includeYear: boolean) {
 }
 
 function formatISO(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate()
+  ).padStart(2, "0")}`;
 }
 
 function addDays(base: Date, days: number) {
@@ -72,7 +74,9 @@ export default function Home() {
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) setList(JSON.parse(saved));
+    if (saved) {
+      setList(JSON.parse(saved));
+    }
   }, []);
 
   useEffect(() => {
@@ -123,15 +127,49 @@ export default function Home() {
       raw = raw.replace(monthDayMatch[0], "");
     }
 
-    // ===== 今日系 =====
-    if (!date && raw.includes("今日")) {
-      setDate(today);
-      raw = raw.replace("今日", "");
+    const slashMatch = raw.match(/(\d{1,2})\/(\d{1,2})/);
+    if (!date && slashMatch) {
+      const y = currentYear;
+      const m = Number(slashMatch[1]);
+      const d = Number(slashMatch[2]);
+      setDate(new Date(y, m - 1, d));
+      raw = raw.replace(slashMatch[0], "");
     }
 
-    if (!date && raw.includes("明日")) {
-      setDate(addDays(today, 1));
-      raw = raw.replace("明日", "");
+    // ===== 今週 + 曜日 =====
+    if (!date && raw.includes("今週")) {
+      const weekday = getWeekdayNumber(raw);
+      if (weekday !== null) {
+        setDate(getThisWeekday(today, weekday));
+        raw = raw.replace("今週", "");
+        raw = raw.replace(/日曜|月曜|火曜|水曜|木曜|金曜|土曜/, "");
+      }
+    }
+
+    // ===== 再来週 + 曜日 =====
+    if (!date && raw.includes("再来週")) {
+      const weekday = getWeekdayNumber(raw);
+      if (weekday !== null) {
+        setDate(getNextWeekday(today, weekday, 2));
+        raw = raw.replace("再来週", "");
+        raw = raw.replace(/日曜|月曜|火曜|水曜|木曜|金曜|土曜/, "");
+      }
+    }
+
+    // ===== 来週 + 曜日 =====
+    if (!date && raw.includes("来週")) {
+      const weekday = getWeekdayNumber(raw);
+      if (weekday !== null) {
+        setDate(getNextWeekday(today, weekday, 1));
+        raw = raw.replace("来週", "");
+        raw = raw.replace(/日曜|月曜|火曜|水曜|木曜|金曜|土曜/, "");
+      }
+    }
+
+    // ===== 今日系（長い語を先に判定）=====
+    if (!date && raw.includes("明々後日")) {
+      setDate(addDays(today, 3));
+      raw = raw.replace("明々後日", "");
     }
 
     if (!date && raw.includes("明後日")) {
@@ -139,9 +177,14 @@ export default function Home() {
       raw = raw.replace("明後日", "");
     }
 
-    if (!date && raw.includes("明々後日")) {
-      setDate(addDays(today, 3));
-      raw = raw.replace("明々後日", "");
+    if (!date && raw.includes("明日")) {
+      setDate(addDays(today, 1));
+      raw = raw.replace("明日", "");
+    }
+
+    if (!date && raw.includes("今日")) {
+      setDate(today);
+      raw = raw.replace("今日", "");
     }
 
     // ===== 1〜100日後 =====
@@ -151,6 +194,36 @@ export default function Home() {
       if (d >= 1 && d <= 100) {
         setDate(addDays(today, d));
         raw = raw.replace(daysMatch[0], "");
+      }
+    }
+
+    // ===== 1〜12ヶ月後 =====
+    const monthLaterMatch = raw.match(/(\d{1,2})ヶ月後/);
+    if (!date && monthLaterMatch) {
+      const m = Number(monthLaterMatch[1]);
+      if (m >= 1 && m <= 12) {
+        setDate(addMonths(today, m));
+        raw = raw.replace(monthLaterMatch[0], "");
+      }
+    }
+
+    // ===== 年系 =====
+    if (!date && raw.includes("再来年")) {
+      setDate(addYears(today, 2));
+      raw = raw.replace("再来年", "");
+    }
+
+    if (!date && raw.includes("来年")) {
+      setDate(addYears(today, 1));
+      raw = raw.replace("来年", "");
+    }
+
+    const yearLaterMatch = raw.match(/(\d)年後/);
+    if (!date && yearLaterMatch) {
+      const y = Number(yearLaterMatch[1]);
+      if (y >= 1 && y <= 3) {
+        setDate(addYears(today, y));
+        raw = raw.replace(yearLaterMatch[0], "");
       }
     }
 
@@ -165,9 +238,23 @@ export default function Home() {
       raw = raw.replace("昼", "");
     }
 
+    if (raw.includes("夕方")) {
+      time = "17:00";
+      raw = raw.replace("夕方", "");
+    }
+
     if (raw.includes("夜")) {
       time = "20:00";
       raw = raw.replace("夜", "");
+    }
+
+    const ampmHourMatch = raw.match(/(午前|午後)(\d{1,2})時/);
+    if (ampmHourMatch) {
+      let hour = Number(ampmHourMatch[2]);
+      if (ampmHourMatch[1] === "午後" && hour < 12) hour += 12;
+      if (ampmHourMatch[1] === "午前" && hour === 12) hour = 0;
+      time = `${String(hour).padStart(2, "0")}:00`;
+      raw = raw.replace(ampmHourMatch[0], "");
     }
 
     const timeMatch = raw.match(/(\d{1,2}):(\d{2})/);
@@ -175,10 +262,16 @@ export default function Home() {
       time = `${timeMatch[1].padStart(2, "0")}:${timeMatch[2]}`;
       raw = raw.replace(timeMatch[0], "");
     } else {
-      const hourMatch = raw.match(/(\d{1,2})時/);
-      if (hourMatch) {
-        time = `${hourMatch[1].padStart(2, "0")}:00`;
-        raw = raw.replace(hourMatch[0], "");
+      const hourMinuteMatch = raw.match(/(\d{1,2})時(\d{1,2})分/);
+      if (hourMinuteMatch) {
+        time = `${hourMinuteMatch[1].padStart(2, "0")}:${hourMinuteMatch[2].padStart(2, "0")}`;
+        raw = raw.replace(hourMinuteMatch[0], "");
+      } else {
+        const hourMatch = raw.match(/(\d{1,2})時/);
+        if (hourMatch) {
+          time = `${hourMatch[1].padStart(2, "0")}:00`;
+          raw = raw.replace(hourMatch[0], "");
+        }
       }
     }
 
@@ -188,7 +281,7 @@ export default function Home() {
   };
 
   const handleClick = () => {
-    if (!text) return;
+    if (!text.trim()) return;
     setPreview(parseText(text));
   };
 
@@ -201,18 +294,28 @@ export default function Home() {
 
   const handleDelete = (index: number) => {
     const target = sortedList[index];
-    setList(list.filter((item) => item !== target));
+    setList(
+      list.filter(
+        (item) =>
+          !(
+            item.date === target.date &&
+            item.title === target.title &&
+            item.time === target.time &&
+            item.sortDate === target.sortDate
+          )
+      )
+    );
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-black text-white">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-black px-4 py-8 text-white">
       <h1 className="text-4xl font-bold">チャベス</h1>
 
       <input
         className="w-80 rounded border bg-white px-3 py-2 text-black"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="例: 明々後日 バイト"
+        placeholder="例: 明々後日 バイト / 来年 誕生日"
       />
 
       <button onClick={handleClick} className="rounded bg-white px-4 py-2 text-black">
@@ -220,29 +323,35 @@ export default function Home() {
       </button>
 
       {preview && (
-        <div className="border p-4">
-          <p>これで登録しますか？</p>
-          <p>{preview.date} {preview.title} {preview.time}</p>
+        <div className="w-80 rounded border p-4">
+          <p className="mb-2">これで登録しますか？</p>
+          <p>
+            {preview.date || "日付なし"} {preview.title} {preview.time}
+          </p>
 
-          <button onClick={handleConfirm} className="bg-green-500 px-2 m-1">
-            OK
-          </button>
+          <div className="mt-3 flex gap-2">
+            <button onClick={handleConfirm} className="rounded bg-green-500 px-3 py-1">
+              OK
+            </button>
 
-          <button onClick={() => setPreview(null)} className="bg-red-500 px-2 m-1">
-            キャンセル
-          </button>
+            <button onClick={() => setPreview(null)} className="rounded bg-red-500 px-3 py-1">
+              キャンセル
+            </button>
+          </div>
         </div>
       )}
 
-      <div>
+      <div className="flex w-80 flex-col gap-2">
         {sortedList.map((item, index) => (
-          <div key={index} className="flex gap-2 items-center">
-            <p>{item.date} {item.title} {item.time}</p>
+          <div key={`${item.sortDate}-${item.time}-${item.title}-${index}`} className="flex items-center justify-between rounded border p-3">
+            <div>
+              <p className="font-bold">{item.title || "名称なし"}</p>
+              <p className="text-sm text-gray-300">
+                {item.date || "日付なし"} {item.time || ""}
+              </p>
+            </div>
 
-            <button
-              onClick={() => handleDelete(index)}
-              className="bg-red-500 px-2"
-            >
+            <button onClick={() => handleDelete(index)} className="rounded bg-red-500 px-2 py-1">
               削除
             </button>
           </div>
