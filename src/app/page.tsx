@@ -81,7 +81,8 @@ export default function Home() {
     } else {
       const hourMatch = raw.match(/(\d{1,2})時/);
       if (hourMatch) {
-        time = `${hourMatch[1]}:00`;
+        const h = hourMatch[1].padStart(2, "0");
+        time = `${h}:00`;
         raw = raw.replace(hourMatch[0], "");
       }
     }
@@ -152,14 +153,17 @@ export default function Home() {
 
       <div>
         {list.map((item, index) => (
-          <div key={index} className="flex gap-2 items-center">
+          <div
+            key={index}
+            className="flex items-center justify-between w-80 border p-2"
+          >
             <p>
               {item.date} {item.title} {item.time}
             </p>
 
             <button
               onClick={() => handleDelete(index)}
-              className="bg-red-500 px-2"
+              className="bg-red-500 px-2 py-1"
             >
               削除
             </button>
