@@ -1,0 +1,28 @@
+"use client";
+
+import { createEvent } from "@/features/event/event.service";
+
+export default function Home() {
+  const handleCreate = () => {
+    const event = createEvent({
+      title: "テスト予定",
+      start_at: new Date().toISOString(),
+      workspace_type: "private",
+      workspace_id: "test",
+      created_by: "user1",
+    });
+
+    console.log(event);
+    alert("予定作成した（console見て）");
+  };
+
+  return (
+    <main style={{ padding: "20px" }}>
+      <h1>チャベス</h1>
+
+      <button onClick={handleCreate}>
+        予定作成（テスト）
+      </button>
+    </main>
+  );
+}
