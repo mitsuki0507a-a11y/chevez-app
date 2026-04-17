@@ -1,0 +1,54 @@
+"use client";
+
+import { useState } from "react";
+import { createEvent } from "@/features/event/event.service";
+import type { Event } from "@/features/event/event.types";
+
+export default function Home() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [title, setTitle] = useState("");
+
+  const handleCreate = () => {
+    if (!title.trim()) return;
+
+    const newEvent = createEvent({
+      title,
+      start_at: new Date().toISOString(),
+      workspace_type: "private",
+      workspace_id: "test",
+      created_by: "user1",
+    });
+
+    setEvents((prev) => [...prev, newEvent]);
+    setTitle("");
+  };
+
+  return (
+    <main style={{ padding: "20px" }}>
+      <h1>チャベス</h1>
+
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="予定タイトル"
+      />
+
+      <button onClick={handleCreate}>
+        予定作成
+      </button>
+
+      <hr />
+
+      <h2>予定一覧</h2>
+
+      {events.length === 0 && <p>まだ予定なし</p>}
+
+      {events.map((event) => (
+        <div key={event.id} style={{ marginBottom: "10px" }}>
+          <p>タイトル: {event.title}</p>
+          <p>開始: {event.start_at}</p>
+        </div>
+      ))}
+    </main>
+  );
+}
