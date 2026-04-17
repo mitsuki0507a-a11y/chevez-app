@@ -1,0 +1,54 @@
+"use client";
+
+import { useState } from "react";
+import { createEvent } from "@/features/event/event.service";
+import type { Event } from "@/features/event/event.types";
+
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr);
+
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+export default function Page() {
+  const [events, setEvents] = useState<Event[]>([]);
+
+  const handleCreate = () => {
+    const event = createEvent({
+      title: "テスト",
+      start_at: new Date().toISOString(),
+      end_at: null,
+      all_day: false,
+      workspace_type: "private",
+      workspace_id: "test",
+      created_by: "me",
+    });
+
+    setEvents((prev) => [...prev, event]);
+  };
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h1>チャベス</h1>
+
+      <button onClick={handleCreate}>予定作成</button>
+
+      <h2>予定一覧</h2>
+
+      {events.map((e) => (
+        <div key={e.id}>
+          <div>タイトル: {e.title}</div>
+          <div>開始: {formatDate(e.start_at)}</div>
+
+          {e.delete_status === "deleted" && (
+            <div style={{ color: "red" }}>削除済み</div>
+          )}
+
+          {e.delete_status === "requested" && (
+            <div style={{ color: "orange" }}>削除申請中</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
