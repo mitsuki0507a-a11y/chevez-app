@@ -1,0 +1,146 @@
+"use client";
+
+import { useState } from "react";
+import { createEvent } from "@/features/event/event.service";
+import type { Event, Role } from "@/features/event/event.types";
+
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+export default function Page() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [currentWorkspaceType, setCurrentWorkspaceType] = useState<"private" | "business">("private");
+
+  const currentRole: Role = "admin";
+
+  // 設定（あとでDB化する）
+  const deleteMode = {
+    private: "direct", // 即削除
+    business: "approval", // 承認制
+  };
+
+  const handleCreate = () => {
+    const event = createEvent({
+      title: currentWorkspaceType === "private" ? "個人予定" : "業務予定",
+      start_at: new Date().toISOString(),
+      end_at: null,
+      all_day: false,
+      workspace_type: currentWorkspaceType,
+      workspace_id: currentWorkspaceType === "private" ? "private-main" : "business-main",
+      created_by: "me",
+    });
+
+    setEvents((prev) => [...prev, event]);
+  };
+
+  const handleDelete = (id: string, workspaceType: "private" | "business") => {
+    // private → 即削除
+    if (deleteMode[workspaceType] === "direct") {
+      setEvents((prev) =>
+        prev.map((e) =>
+          e.id === id
+            ? {
+                ...e,
+                delete_status: "deleted",
+                updated_at: new Date().toISOString(),
+              }
+            : e
+        )
+      );
+      return;
+    }
+
+    // business → 申請
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === id
+          ? {
+              ...e,
+              delete_status: "requested",
+              delete_requested_by: "me",
+              delete_requested_at: new Date().toISOString(),
+              delete_review_result: "pending",
+              updated_at: new Date().toISOString(),
+            }
+          : e
+      )
+    );
+  };
+
+  const handleApprove = (id: string) => {
+    if (currentRole !== "admin" && currentRole !== "owner" && currentRole !== "owner_ceo") return;
+
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === id
+          ? {
+              ...e,
+              delete_status: "deleted",
+              delete_reviewed_by: "me",
+              delete_reviewed_at: new Date().toISOString(),
+              delete_review_result: "approved",
+              updated_at: new Date().toISOString(),
+            }
+          : e
+      )
+    );
+  };
+
+  const filteredEvents = events.filter(
+    (e) => e.workspace_type === currentWorkspaceType
+  );
+
+  return (
+    <div style={{ padding: 20, color: "white", background: "#111", minHeight: "100vh" }}>
+      <h1>チャベス</h1>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <button onClick={() => setCurrentWorkspaceType("private")}>private</button>
+        <button onClick={() => setCurrentWorkspaceType("business")}>business</button>
+      </div>
+
+      <div>workspace: {currentWorkspaceType}</div>
+      <div>role: {currentRole}</div>
+
+      <button onClick={handleCreate} style={{ marginTop: 10 }}>
+        予定作成
+      </button>
+
+      <h2>予定一覧</h2>
+
+      {filteredEvents.map((e) => (
+        <div key={e.id} style={{ border: "1px solid #444", padding: 10, marginTop: 10 }}>
+          <div>{e.title}</div>
+          <div>{formatDate(e.start_at)}</div>
+
+          {/* 削除ボタン */}
+          {e.delete_status === "none" && (
+            <button onClick={() => handleDelete(e.id, e.workspace_type)}>
+              削除
+            </button>
+          )}
+
+          {/* 申請中 */}
+          {e.delete_status === "requested" && (
+            <>
+              <div style={{ color: "orange" }}>削除申請中</div>
+
+              {(currentRole === "admin" || currentRole === "owner" || currentRole === "owner_ceo") && (
+                <button onClick={() => handleApprove(e.id)}>
+                  削除確定
+                </button>
+              )}
+            </>
+          )}
+
+          {/* 削除済み */}
+          {e.delete_status === "deleted" && (
+            <div style={{ color: "red" }}>削除済み</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
