@@ -1,0 +1,29 @@
+import type { Event } from "./event.types";
+
+const eventStore = new Map<string, Event>();
+
+export async function saveEvent(event: Event): Promise<Event> {
+  eventStore.set(event.id, event);
+  return event;
+}
+
+export async function getEventById(eventId: string): Promise<Event | null> {
+  return eventStore.get(eventId) ?? null;
+}
+
+export async function getAllEvents(): Promise<Event[]> {
+  return Array.from(eventStore.values());
+}
+
+export async function updateEvent(event: Event): Promise<Event> {
+  if (!eventStore.has(event.id)) {
+    throw new Error("Event not found");
+  }
+
+  eventStore.set(event.id, event);
+  return event;
+}
+
+export async function deleteEventById(eventId: string): Promise<void> {
+  eventStore.delete(eventId);
+}
