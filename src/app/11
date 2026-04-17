@@ -1,0 +1,125 @@
+"use client";
+
+import { useState } from "react";
+import {
+  createEvent,
+  requestDeleteEvent,
+  approveDeleteEvent,
+} from "@/features/event/event.service";
+import type { Event } from "@/features/event/event.types";
+
+export default function Home() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [title, setTitle] = useState("");
+  const [startAt, setStartAt] = useState("");
+
+  // 仮：ログインユーザー
+  const currentUserRole = "admin"; // ←ここ変えると挙動変わる
+
+  const handleCreate = () => {
+    if (!title.trim()) return;
+    if (!startAt) return;
+
+    const date = new Date(startAt);
+    if (isNaN(date.getTime())) return;
+
+    const newEvent = createEvent({
+      title: title.trim(),
+      start_at: date.toISOString(),
+      workspace_type: "private",
+      workspace_id: "test",
+      created_by: "user1",
+    });
+
+    setEvents((prev) => [...prev, newEvent]);
+    setTitle("");
+    setStartAt("");
+  };
+
+  const handleDeleteRequest = (id: string) => {
+    setEvents((prev) =>
+      prev.map((event) =>
+        event.id === id
+          ? requestDeleteEvent(event, "user1")
+          : event
+      )
+    );
+  };
+
+  const handleApproveDelete = (id: string) => {
+    if (currentUserRole !== "admin") return;
+
+    setEvents((prev) =>
+      prev.map((event) =>
+        event.id === id
+          ? approveDeleteEvent(event)
+          : event
+      )
+    );
+  };
+
+  return (
+    <main style={{ padding: "20px" }}>
+      <h1>チャベス</h1>
+
+      <div>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="タイトル"
+        />
+
+        <input
+          type="datetime-local"
+          value={startAt}
+          onChange={(e) => setStartAt(e.target.value)}
+        />
+
+        <button onClick={handleCreate}>
+          予定作成
+        </button>
+      </div>
+
+      <hr />
+
+      <h2>予定一覧</h2>
+
+      {events.map((event) => (
+        <div key={event.id} style={{ marginBottom: "10px" }}>
+          <p>{event.title}</p>
+          <p>
+            {new Date(event.start_at).toLocaleString("ja-JP")}
+          </p>
+
+          {event.delete_status === "none" && (
+            <button onClick={() => handleDeleteRequest(event.id)}>
+              削除申請
+            </button>
+          )}
+
+          {event.delete_status === "requested" && (
+            <>
+              <p style={{ color: "orange" }}>
+                削除申請中
+              </p>
+
+              {currentUserRole === "admin" && (
+                <button
+                  onClick={() => handleApproveDelete(event.id)}
+                >
+                  削除確定（admin）
+                </button>
+              )}
+            </>
+          )}
+
+          {event.delete_status === "deleted" && (
+            <p style={{ color: "red" }}>
+              削除済み
+            </p>
+          )}
+        </div>
+      ))}
+    </main>
+  );
+}
