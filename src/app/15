@@ -1,0 +1,111 @@
+"use client";
+
+import { useState } from "react";
+import { createEvent } from "@/features/event/event.service";
+import type { Event, Role } from "@/features/event/event.types";
+
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+export default function Page() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [currentWorkspaceType, setCurrentWorkspaceType] = useState<"private" | "business">("private");
+
+  const currentRole: Role = "admin";
+
+  const handleCreate = () => {
+    const event = createEvent({
+      title: currentWorkspaceType === "private" ? "個人予定" : "業務予定",
+      start_at: new Date().toISOString(),
+      end_at: null,
+      all_day: false,
+      workspace_type: currentWorkspaceType,
+      workspace_id: currentWorkspaceType === "private" ? "private-main" : "business-main",
+      created_by: "me",
+    });
+
+    setEvents((prev) => [...prev, event]);
+  };
+
+  const handleDeleteRequest = (id: string) => {
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === id ? { ...e, delete_status: "requested" } : e
+      )
+    );
+  };
+
+  const handleDeleteApprove = (id: string) => {
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === id ? { ...e, delete_status: "deleted" } : e
+      )
+    );
+  };
+
+  const filteredEvents = events.filter(
+    (e) => e.workspace_type === currentWorkspaceType
+  );
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h1>チャベス</h1>
+
+      <div style={{ marginBottom: 16 }}>
+        <button onClick={() => setCurrentWorkspaceType("private")}>
+          private
+        </button>
+
+        <button
+          onClick={() => setCurrentWorkspaceType("business")}
+          style={{ marginLeft: 8 }}
+        >
+          business
+        </button>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <div>現在のworkspace: {currentWorkspaceType}</div>
+        <div>現在のrole: {currentRole}</div>
+      </div>
+
+      <button onClick={handleCreate}>予定作成</button>
+
+      <h2>予定一覧</h2>
+
+      {filteredEvents.length === 0 && <p>このworkspaceの予定はまだなし</p>}
+
+      {filteredEvents.map((e) => (
+        <div key={e.id} style={{ marginBottom: 14 }}>
+          <div>タイトル: {e.title}</div>
+          <div>開始: {formatDate(e.start_at)}</div>
+          <div>workspace: {e.workspace_type}</div>
+
+          {e.delete_status === "none" && (
+            <button onClick={() => handleDeleteRequest(e.id)}>
+              削除申請
+            </button>
+          )}
+
+          {e.delete_status === "requested" && (
+            <>
+              <div style={{ color: "orange" }}>削除申請中</div>
+
+              {(currentRole === "admin" || currentRole === "owner") && (
+                <button onClick={() => handleDeleteApprove(e.id)}>
+                  削除確定
+                </button>
+              )}
+            </>
+          )}
+
+          {e.delete_status === "deleted" && (
+            <div style={{ color: "red" }}>削除済み</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
