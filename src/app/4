@@ -1,0 +1,15 @@
+export default function Home() {
+  return (
+    <main style={{ padding: "20px", fontSize: "18px" }}>
+      <h1>チャベス</h1>
+
+      <p>予定管理システム（開発中）</p>
+
+      <ul>
+        <li>予定作成</li>
+        <li>予定管理</li>
+        <li>グループ共有</li>
+      </ul>
+    </main>
+  );
+}
