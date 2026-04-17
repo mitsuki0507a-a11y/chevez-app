@@ -1,0 +1,51 @@
+export type Role =
+  | "member"
+  | "manager"
+  | "admin"
+  | "owner"
+  | "owner_ceo";
+
+export type EventStatus = "draft" | "confirmed";
+
+export type DeleteStatus = "none" | "requested" | "deleted";
+
+export type Event = {
+  id: string;
+
+  title: string;
+  description: string | null;
+  tags: string[];
+
+  start_at: string;
+  end_at: string | null;
+  all_day: boolean;
+
+  workspace_type: "private" | "business";
+  workspace_id: string;
+  created_by: string;
+
+  status: EventStatus;
+
+  participant_user_ids: string[];
+  mention_user_ids: string[];
+
+  visible_role_min: Role;
+
+  editable_role_min: "admin" | "owner" | "owner_ceo";
+  manager_can_edit: boolean;
+
+  delete_status: DeleteStatus;
+  delete_requested_by: string | null;
+  delete_requested_at: string | null;
+  delete_reviewed_by: string | null;
+  delete_reviewed_at: string | null;
+  delete_review_result: "pending" | "approved" | "rejected" | null;
+
+  location_text: string | null;
+  notify_before_minutes: number | null;
+
+  has_chat: true;
+
+  created_at: string;
+  updated_at: string;
+};
