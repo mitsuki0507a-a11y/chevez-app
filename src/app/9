@@ -1,0 +1,97 @@
+"use client";
+
+import { useState } from "react";
+import { createEvent } from "@/features/event/event.service";
+import type { Event } from "@/features/event/event.types";
+
+export default function Home() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [title, setTitle] = useState("");
+  const [startAt, setStartAt] = useState("");
+
+  const handleCreate = () => {
+    // セキュリティ① 空チェック
+    if (!title.trim()) {
+      alert("タイトル必須");
+      return;
+    }
+
+    // セキュリティ② 長さ制限
+    if (title.length > 50) {
+      alert("タイトル長すぎ");
+      return;
+    }
+
+    // セキュリティ③ 日付チェック
+    if (!startAt) {
+      alert("時間入れろ");
+      return;
+    }
+
+    const date = new Date(startAt);
+
+    // セキュリティ④ 無効日付
+    if (isNaN(date.getTime())) {
+      alert("日付おかしい");
+      return;
+    }
+
+    // セキュリティ⑤ 過去禁止
+    if (date.getTime() < Date.now()) {
+      alert("過去は無理");
+      return;
+    }
+
+    const newEvent = createEvent({
+      title: title.trim(),
+      start_at: date.toISOString(),
+      workspace_type: "private",
+      workspace_id: "test",
+      created_by: "user1",
+    });
+
+    setEvents((prev) => [...prev, newEvent]);
+
+    setTitle("");
+    setStartAt("");
+  };
+
+  return (
+    <main style={{ padding: "20px" }}>
+      <h1>チャベス</h1>
+
+      <div>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="タイトル"
+        />
+
+        <input
+          type="datetime-local"
+          value={startAt}
+          onChange={(e) => setStartAt(e.target.value)}
+        />
+
+        <button onClick={handleCreate}>
+          予定作成
+        </button>
+      </div>
+
+      <hr />
+
+      <h2>予定一覧</h2>
+
+      {events.length === 0 && <p>まだ予定なし</p>}
+
+      {events.map((event) => (
+        <div key={event.id} style={{ marginBottom: "10px" }}>
+          <p>タイトル: {event.title}</p>
+          <p>
+            開始: {new Date(event.start_at).toLocaleString("ja-JP")}
+          </p>
+        </div>
+      ))}
+    </main>
+  );
+}
