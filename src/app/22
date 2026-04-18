@@ -1,0 +1,168 @@
+"use client";
+
+import { useState } from "react";
+import { createEvent } from "@/features/event/event.service";
+import { parseEventText } from "@/features/parser/parser";
+import type { Event, Role } from "@/features/event/event.types";
+
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+export default function Page() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [preview, setPreview] = useState<any>(null);
+
+  const [currentWorkspaceType, setCurrentWorkspaceType] = useState<"private" | "business">("private");
+
+  const currentRole: Role = "admin";
+
+  const handleParse = () => {
+    if (!inputText.trim()) {
+      alert("入力して");
+      return;
+    }
+
+    const parsed = parseEventText(inputText);
+    setPreview(parsed);
+  };
+
+  const handleConfirm = () => {
+    if (!preview) return;
+
+    const dt = preview.parsedDateTime;
+
+    const date = new Date(
+      dt.year,
+      dt.month - 1,
+      dt.day,
+      dt.hour,
+      dt.minute
+    );
+
+    const event = createEvent({
+      title: preview.title,
+      start_at: date.toISOString(),
+      workspace_type: currentWorkspaceType,
+      workspace_id: currentWorkspaceType === "private" ? "private-main" : "business-main",
+      created_by: "me",
+    });
+
+    setEvents((prev) => [...prev, event]);
+
+    setPreview(null);
+    setInputText("");
+  };
+
+  const handleCancel = () => {
+    setPreview(null);
+  };
+
+  const handleDelete = (id: string, type: "private" | "business") => {
+    if (type === "private") {
+      setEvents((prev) =>
+        prev.map((e) =>
+          e.id === id ? { ...e, delete_status: "deleted" } : e
+        )
+      );
+      return;
+    }
+
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === id
+          ? { ...e, delete_status: "requested" }
+          : e
+      )
+    );
+  };
+
+  const handleApprove = (id: string) => {
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === id ? { ...e, delete_status: "deleted" } : e
+      )
+    );
+  };
+
+  const filteredEvents = events.filter(
+    (e) =>
+      e.workspace_type === currentWorkspaceType &&
+      e.delete_status !== "deleted"
+  );
+
+  return (
+    <div style={{ padding: 20, color: "white", background: "#111", minHeight: "100vh" }}>
+      <h1>チャベス</h1>
+
+      {/* workspace切替 */}
+      <div style={{ marginBottom: 10 }}>
+        <button onClick={() => setCurrentWorkspaceType("private")}>
+          private
+        </button>
+        <button onClick={() => setCurrentWorkspaceType("business")}>
+          business
+        </button>
+      </div>
+
+      {/* 自然文入力 */}
+      <div style={{ marginBottom: 20 }}>
+        <input
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          placeholder="例: 明日10時 会議"
+          style={{ width: 300 }}
+        />
+        <button onClick={handleParse}>解析</button>
+      </div>
+
+      {/* 確認フェーズ */}
+      {preview && (
+        <div style={{ border: "1px solid white", padding: 10, marginBottom: 20 }}>
+          <h3>確認</h3>
+          <p>タイトル: {preview.title}</p>
+          <p>
+            日時:
+            {preview.parsedDateTime.year}/
+            {preview.parsedDateTime.month}/
+            {preview.parsedDateTime.day}{" "}
+            {preview.parsedDateTime.hour}:
+            {String(preview.parsedDateTime.minute).padStart(2, "0")}
+          </p>
+
+          <button onClick={handleConfirm}>登録</button>
+          <button onClick={handleCancel}>キャンセル</button>
+        </div>
+      )}
+
+      {/* 一覧 */}
+      <h2>予定一覧</h2>
+
+      {filteredEvents.map((e) => (
+        <div key={e.id} style={{ marginBottom: 10 }}>
+          <div>{e.title}</div>
+          <div>{formatDate(e.start_at)}</div>
+
+          {e.delete_status === "none" && (
+            <button onClick={() => handleDelete(e.id, e.workspace_type)}>
+              削除
+            </button>
+          )}
+
+          {e.delete_status === "requested" && (
+            <>
+              <div>削除申請中</div>
+              {(currentRole === "admin" || currentRole === "owner") && (
+                <button onClick={() => handleApprove(e.id)}>
+                  削除確定
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
