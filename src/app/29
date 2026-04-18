@@ -1,0 +1,345 @@
+"use client";
+
+import { useState } from "react";
+import { createEvent } from "../features/event/event.service";
+import { parseEventText } from "../features/parser/parser";
+import type { Event, Role } from "../features/event/event.types";
+
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+type PreviewEvent = {
+  title: string;
+  tags: string[];
+  start_at: string;
+  workspace_type: "private" | "business";
+};
+
+export default function Page() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [preview, setPreview] = useState<PreviewEvent | null>(null);
+  const [currentWorkspaceType, setCurrentWorkspaceType] = useState<"private" | "business">("private");
+
+  const currentRole: Role = "admin";
+
+  const deleteMode = {
+    private: "direct",
+    business: "approval",
+  } as const;
+
+  const handleRegister = () => {
+    if (!inputText.trim()) {
+      alert("入力して");
+      return;
+    }
+
+    const parsed = parseEventText(inputText);
+    const dt = parsed.parsedDateTime;
+
+    if (!dt) {
+      alert("解析できない");
+      return;
+    }
+
+    const date = new Date(
+      dt.year,
+      dt.month - 1,
+      dt.day,
+      dt.hour,
+      dt.minute
+    );
+
+    if (isNaN(date.getTime())) {
+      alert("日付おかしい");
+      return;
+    }
+
+    setPreview({
+      title: parsed.title,
+      tags: parsed.tags,
+      start_at: date.toISOString(),
+      workspace_type: currentWorkspaceType,
+    });
+  };
+
+  const handleConfirm = () => {
+    if (!preview) return;
+
+    const event = createEvent({
+      title: preview.title,
+      tags: preview.tags,
+      start_at: preview.start_at,
+      end_at: null,
+      all_day: false,
+      workspace_type: preview.workspace_type,
+      workspace_id:
+        preview.workspace_type === "private"
+          ? "private-main"
+          : "business-main",
+      created_by: "me",
+    });
+
+    setEvents((prev) => [...prev, event]);
+    setPreview(null);
+    setInputText("");
+  };
+
+  const handleCancel = () => {
+    setPreview(null);
+  };
+
+  const handleDelete = (id: string, workspaceType: "private" | "business") => {
+    if (deleteMode[workspaceType] === "direct") {
+      setEvents((prev) =>
+        prev.map((e) =>
+          e.id === id
+            ? {
+                ...e,
+                delete_status: "deleted",
+                updated_at: new Date().toISOString(),
+              }
+            : e
+        )
+      );
+      return;
+    }
+
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === id
+          ? {
+              ...e,
+              delete_status: "requested",
+              delete_requested_by: "me",
+              delete_requested_at: new Date().toISOString(),
+              delete_review_result: "pending",
+              updated_at: new Date().toISOString(),
+            }
+          : e
+      )
+    );
+  };
+
+  const handleApprove = (id: string) => {
+    if (
+      currentRole !== "admin" &&
+      currentRole !== "owner" &&
+      currentRole !== "owner_ceo"
+    ) {
+      return;
+    }
+
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === id
+          ? {
+              ...e,
+              delete_status: "deleted",
+              delete_reviewed_by: "me",
+              delete_reviewed_at: new Date().toISOString(),
+              delete_review_result: "approved",
+              updated_at: new Date().toISOString(),
+            }
+          : e
+      )
+    );
+  };
+
+  const filteredEvents = events.filter(
+    (e) =>
+      e.workspace_type === currentWorkspaceType &&
+      e.delete_status !== "deleted"
+  );
+
+  return (
+    <div style={{ padding: 20, color: "white", background: "#111", minHeight: "100vh" }}>
+      <h1>チャベス</h1>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <button
+          type="button"
+          onClick={() => setCurrentWorkspaceType("private")}
+          style={{
+            padding: "8px 12px",
+            border: "1px solid white",
+            background: currentWorkspaceType === "private" ? "white" : "#222",
+            color: currentWorkspaceType === "private" ? "black" : "white",
+            cursor: "pointer",
+          }}
+        >
+          private
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setCurrentWorkspaceType("business")}
+          style={{
+            padding: "8px 12px",
+            border: "1px solid white",
+            background: currentWorkspaceType === "business" ? "white" : "#222",
+            color: currentWorkspaceType === "business" ? "black" : "white",
+            cursor: "pointer",
+          }}
+        >
+          business
+        </button>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <div>workspace: {currentWorkspaceType}</div>
+        <div>role: {currentRole}</div>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <input
+          type="text"
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          placeholder="例: 来週金曜重要会議"
+          style={{
+            padding: "8px 12px",
+            border: "1px solid white",
+            background: "#222",
+            color: "white",
+            width: 300,
+          }}
+        />
+
+        <button
+          type="button"
+          onClick={handleRegister}
+          style={{
+            padding: "8px 12px",
+            border: "1px solid white",
+            background: "#222",
+            color: "white",
+            cursor: "pointer",
+          }}
+        >
+          登録
+        </button>
+      </div>
+
+      {preview && (
+        <div
+          style={{
+            border: "1px solid #666",
+            padding: 12,
+            marginBottom: 16,
+            background: "#1a1a1a",
+          }}
+        >
+          <h2>確認</h2>
+          <div>タイトル: {preview.title}</div>
+          <div>開始: {formatDate(preview.start_at)}</div>
+          <div>workspace: {preview.workspace_type}</div>
+          <div>
+            タグ: {preview.tags.length > 0 ? preview.tags.join(" / ") : "なし"}
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button
+              type="button"
+              onClick={handleConfirm}
+              style={{
+                padding: "8px 12px",
+                border: "1px solid #0f0",
+                background: "#222",
+                color: "#0f0",
+                cursor: "pointer",
+              }}
+            >
+              確定
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCancel}
+              style={{
+                padding: "8px 12px",
+                border: "1px solid #aaa",
+                background: "#222",
+                color: "#aaa",
+                cursor: "pointer",
+              }}
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
+
+      <h2>予定一覧</h2>
+
+      {filteredEvents.length === 0 && <p>このworkspaceの予定はまだなし</p>}
+
+      {filteredEvents.map((e) => (
+        <div
+          key={e.id}
+          style={{
+            marginBottom: 14,
+            padding: 12,
+            border: "1px solid #444",
+          }}
+        >
+          <div>タイトル: {e.title}</div>
+          <div>開始: {formatDate(e.start_at)}</div>
+          <div>workspace: {e.workspace_type}</div>
+          <div>
+            タグ: {e.tags.length > 0 ? e.tags.join(" / ") : "なし"}
+          </div>
+
+          {e.delete_status === "none" && (
+            <button
+              type="button"
+              onClick={() => handleDelete(e.id, e.workspace_type)}
+              style={{
+                marginTop: 8,
+                padding: "6px 10px",
+                border: "1px solid orange",
+                background: "#222",
+                color: "orange",
+                cursor: "pointer",
+              }}
+            >
+              削除
+            </button>
+          )}
+
+          {e.delete_status === "requested" && (
+            <>
+              <div style={{ color: "orange", marginTop: 8 }}>削除申請中</div>
+
+              {(currentRole === "admin" || currentRole === "owner" || currentRole === "owner_ceo") && (
+                <button
+                  type="button"
+                  onClick={() => handleApprove(e.id)}
+                  style={{
+                    marginTop: 8,
+                    padding: "6px 10px",
+                    border: "1px solid red",
+                    background: "#222",
+                    color: "red",
+                    cursor: "pointer",
+                  }}
+                >
+                  削除確定
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
