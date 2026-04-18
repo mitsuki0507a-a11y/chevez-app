@@ -1,0 +1,281 @@
+"use client";
+
+import { useState } from "react";
+import { createEvent } from "../features/event/event.service";
+import { parseEventText } from "../features/parser/parser";
+import type { Event } from "../features/event/event.types";
+
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(
+    d.getHours()
+  ).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+type PreviewEvent = {
+  title: string;
+  tags: string[];
+  start_at: string;
+  workspace_type: "private" | "business";
+};
+
+export default function Page() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [workspaceType, setWorkspaceType] =
+    useState<"private" | "business">("private");
+  const [preview, setPreview] = useState<PreviewEvent | null>(null);
+  const [debugMessage, setDebugMessage] = useState("待機中");
+
+  const handleRegister = () => {
+    setDebugMessage("登録ボタン反応");
+
+    const trimmed = inputText.trim();
+
+    if (!trimmed) {
+      setDebugMessage("入力空");
+      alert("入力して");
+      return;
+    }
+
+    const parsed = parseEventText(trimmed);
+    const dt = parsed.parsedDateTime;
+
+    if (!dt) {
+      setDebugMessage("解析失敗");
+      alert("解析できない");
+      return;
+    }
+
+    const date = new Date(
+      dt.year,
+      dt.month - 1,
+      dt.day,
+      dt.hour,
+      dt.minute
+    );
+
+    if (isNaN(date.getTime())) {
+      setDebugMessage("日付異常");
+      alert("日付おかしい");
+      return;
+    }
+
+    setPreview({
+      title: parsed.title,
+      tags: parsed.tags,
+      start_at: date.toISOString(),
+      workspace_type: workspaceType,
+    });
+
+    setDebugMessage("確認表示中");
+  };
+
+  const handleConfirm = () => {
+    if (!preview) {
+      setDebugMessage("previewなし");
+      return;
+    }
+
+    const event = createEvent({
+      title: preview.title,
+      tags: preview.tags,
+      start_at: preview.start_at,
+      end_at: null,
+      all_day: false,
+      workspace_type: preview.workspace_type,
+      workspace_id:
+        preview.workspace_type === "private"
+          ? "private-main"
+          : "business-main",
+      created_by: "me",
+    });
+
+    setEvents((prev) => [...prev, event]);
+    setPreview(null);
+    setInputText("");
+    setDebugMessage("保存完了");
+  };
+
+  const handleCancel = () => {
+    setPreview(null);
+    setDebugMessage("確認キャンセル");
+  };
+
+  const visibleEvents = events.filter(
+    (event) => event.workspace_type === workspaceType
+  );
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#111",
+        color: "white",
+        padding: 20,
+      }}
+    >
+      <h1>チャベス</h1>
+
+      <div style={{ marginBottom: 16 }}>
+        <div>workspace: {workspaceType}</div>
+        <div>debug: {debugMessage}</div>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <label
+          htmlFor="workspace-select"
+          style={{ display: "block", marginBottom: 8 }}
+        >
+          workspace選択
+        </label>
+
+        <select
+          id="workspace-select"
+          value={workspaceType}
+          onChange={(e) => {
+            const value = e.target.value as "private" | "business";
+            setWorkspaceType(value);
+            setDebugMessage(`workspace変更: ${value}`);
+          }}
+          style={{
+            minHeight: 48,
+            width: 220,
+            fontSize: 16,
+            padding: "10px 12px",
+            background: "#222",
+            color: "white",
+            border: "1px solid white",
+          }}
+        >
+          <option value="private">private</option>
+          <option value="business">business</option>
+        </select>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          flexWrap: "wrap",
+          marginBottom: 16,
+        }}
+      >
+        <input
+          type="text"
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          placeholder="例: 明日夜バイト"
+          style={{
+            minHeight: 48,
+            width: 320,
+            maxWidth: "100%",
+            fontSize: 16,
+            padding: "12px",
+            background: "#222",
+            color: "white",
+            border: "1px solid white",
+          }}
+        />
+
+        <button
+          type="button"
+          onClick={handleRegister}
+          style={{
+            minHeight: 48,
+            minWidth: 120,
+            fontSize: 16,
+            padding: "12px 16px",
+            background: "#222",
+            color: "white",
+            border: "1px solid white",
+          }}
+        >
+          登録
+        </button>
+      </div>
+
+      {preview && (
+        <div
+          style={{
+            border: "1px solid #666",
+            background: "#1a1a1a",
+            padding: 16,
+            marginBottom: 16,
+          }}
+        >
+          <h2>確認</h2>
+          <div>タイトル: {preview.title}</div>
+          <div>開始: {formatDate(preview.start_at)}</div>
+          <div>workspace: {preview.workspace_type}</div>
+          <div>
+            タグ: {preview.tags.length > 0 ? preview.tags.join(" / ") : "なし"}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              marginTop: 12,
+            }}
+          >
+            <button
+              type="button"
+              onClick={handleConfirm}
+              style={{
+                minHeight: 48,
+                minWidth: 120,
+                fontSize: 16,
+                padding: "12px 16px",
+                background: "#222",
+                color: "#0f0",
+                border: "1px solid #0f0",
+              }}
+            >
+              確定
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCancel}
+              style={{
+                minHeight: 48,
+                minWidth: 120,
+                fontSize: 16,
+                padding: "12px 16px",
+                background: "#222",
+                color: "#aaa",
+                border: "1px solid #aaa",
+              }}
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
+
+      <h2>予定一覧</h2>
+
+      {visibleEvents.length === 0 && <p>このworkspaceの予定はまだなし</p>}
+
+      {visibleEvents.map((event) => (
+        <div
+          key={event.id}
+          style={{
+            border: "1px solid #444",
+            padding: 12,
+            marginBottom: 12,
+          }}
+        >
+          <div>タイトル: {event.title}</div>
+          <div>開始: {formatDate(event.start_at)}</div>
+          <div>workspace: {event.workspace_type}</div>
+          <div>
+            タグ: {event.tags.length > 0 ? event.tags.join(" / ") : "なし"}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
