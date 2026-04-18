@@ -1,0 +1,111 @@
+type Workspace = "private" | "business";
+
+type SearchParams = {
+  workspace?: string;
+  text?: string;
+  preview?: string;
+  saved?: string;
+};
+
+function normalizeWorkspace(value: string | undefined): Workspace {
+  return value === "business" ? "business" : "private";
+}
+
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const params = await searchParams;
+
+  const workspace = normalizeWorkspace(params.workspace);
+  const text = params.text ?? "";
+  const preview = params.preview ?? "";
+  const saved = params.saved ?? "";
+
+  return (
+    <main className="min-h-screen bg-black text-white">
+      <div className="mx-auto max-w-4xl px-5 py-8">
+        <h1 className="mb-8 text-4xl font-bold sm:text-5xl">チャベス 動作確認</h1>
+
+        <div className="mb-8 space-y-4 text-2xl sm:text-3xl">
+          <div>workspace: {workspace}</div>
+          <div>text: {text || "なし"}</div>
+          <div>preview: {preview || "なし"}</div>
+          <div>saved: {saved || "なし"}</div>
+        </div>
+
+        <div className="mb-8 flex flex-wrap gap-4">
+          <a
+            href="/?workspace=private"
+            className={`min-h-16 min-w-[180px] rounded-3xl border-2 px-6 py-4 text-center text-2xl sm:text-3xl ${
+              workspace === "private"
+                ? "border-white bg-white text-black"
+                : "border-white text-white"
+            }`}
+          >
+            private
+          </a>
+
+          <a
+            href="/?workspace=business"
+            className={`min-h-16 min-w-[180px] rounded-3xl border-2 px-6 py-4 text-center text-2xl sm:text-3xl ${
+              workspace === "business"
+                ? "border-white bg-white text-black"
+                : "border-white text-white"
+            }`}
+          >
+            business
+          </a>
+        </div>
+
+        <form action="/" method="GET" className="mb-8 space-y-4">
+          <input type="hidden" name="workspace" value={workspace} />
+
+          <input
+            type="text"
+            name="text"
+            defaultValue={text}
+            placeholder="予定を入力"
+            className="min-h-16 w-full rounded-3xl border-2 border-white bg-black px-5 py-4 text-2xl text-white"
+          />
+
+          <button
+            type="submit"
+            name="preview"
+            value="確認する"
+            className="min-h-16 min-w-[180px] rounded-3xl border-2 border-white px-6 py-4 text-2xl text-white"
+          >
+            登録
+          </button>
+        </form>
+
+        {preview && (
+          <div className="rounded-3xl border-2 border-zinc-700 p-5">
+            <h2 className="mb-4 text-3xl font-bold">確認</h2>
+            <div className="mb-2 text-2xl">workspace: {workspace}</div>
+            <div className="mb-6 text-2xl">入力内容: {text || "なし"}</div>
+
+            <div className="flex flex-wrap gap-4">
+              <a
+                href={`/?workspace=${workspace}&saved=${encodeURIComponent(
+                  text || "保存内容なし"
+                )}`}
+                className="min-h-16 min-w-[180px] rounded-3xl border-2 border-white bg-white px-6 py-4 text-center text-2xl text-black"
+              >
+                保存
+              </a>
+
+              <a
+                href={`/?workspace=${workspace}&text=${encodeURIComponent(text)}`}
+                className="min-h-16 min-w-[180px] rounded-3xl border-2 border-white px-6 py-4 text-center text-2xl text-white"
+              >
+                キャンセル
+              </a>
+            </div>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
