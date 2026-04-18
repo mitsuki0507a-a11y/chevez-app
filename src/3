@@ -1,0 +1,81 @@
+"use client";
+
+import { useState } from "react";
+
+export default function Page() {
+  const [count, setCount] = useState(0);
+  const [message, setMessage] = useState("待機中");
+  const [workspace, setWorkspace] = useState<"private" | "business">("private");
+
+  const handleTest = () => {
+    alert("テスト押された");
+    setCount((prev) => prev + 1);
+    setMessage("テストボタン反応");
+  };
+
+  const handlePrivate = () => {
+    alert("private押された");
+    setCount((prev) => prev + 1);
+    setWorkspace("private");
+    setMessage("private選択");
+  };
+
+  const handleBusiness = () => {
+    alert("business押された");
+    setCount((prev) => prev + 1);
+    setWorkspace("business");
+    setMessage("business選択");
+  };
+
+  return (
+    <main className="min-h-screen bg-black text-white">
+      <div className="mx-auto max-w-4xl px-5 py-8">
+        <h1 className="mb-8 text-4xl font-bold sm:text-5xl">チャベス 動作確認</h1>
+
+        <div className="mb-8 space-y-4 text-3xl sm:text-4xl">
+          <div>count: {count}</div>
+          <div>message: {message}</div>
+          <div>workspace: {workspace}</div>
+        </div>
+
+        <div className="relative z-10 mb-8 flex flex-wrap gap-4">
+          <button
+            type="button"
+            onClick={handleTest}
+            className="relative z-10 min-h-16 min-w-[140px] rounded-3xl border-2 border-white px-6 py-4 text-3xl text-white active:scale-95"
+          >
+            テスト
+          </button>
+
+          <button
+            type="button"
+            onClick={handlePrivate}
+            className={`relative z-10 min-h-16 min-w-[180px] rounded-3xl border-2 px-6 py-4 text-3xl active:scale-95 ${
+              workspace === "private"
+                ? "border-white bg-white text-black"
+                : "border-white text-white"
+            }`}
+          >
+            private
+          </button>
+
+          <button
+            type="button"
+            onClick={handleBusiness}
+            className={`relative z-10 min-h-16 min-w-[180px] rounded-3xl border-2 px-6 py-4 text-3xl active:scale-95 ${
+              workspace === "business"
+                ? "border-white bg-white text-black"
+                : "border-white text-white"
+            }`}
+          >
+            business
+          </button>
+        </div>
+
+        <div className="relative z-0 text-2xl text-zinc-400 sm:text-3xl">
+          ボタンを押して、alert・count・message・workspace が変われば正常。
+        </div>
+      </div>
+    </main>
+  );
+}
