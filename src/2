@@ -1,0 +1,70 @@
+"use client";
+
+import { useState } from "react";
+
+export default function Page() {
+  const [count, setCount] = useState(0);
+  const [message, setMessage] = useState("待機中");
+  const [workspace, setWorkspace] = useState<"private" | "business">("private");
+
+  return (
+    <main className="min-h-screen bg-black text-white p-6">
+      <h1 className="text-2xl font-bold mb-6">チャベス 動作確認</h1>
+
+      <div className="space-y-2 mb-6">
+        <div>count: {count}</div>
+        <div>message: {message}</div>
+        <div>workspace: {workspace}</div>
+      </div>
+
+      <div className="flex flex-wrap gap-3 mb-6">
+        <button
+          type="button"
+          onClick={() => {
+            setCount((prev) => prev + 1);
+            setMessage("テストボタン反応");
+          }}
+          className="px-4 py-3 border border-white rounded-xl min-h-12"
+        >
+          テスト
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setWorkspace("private");
+            setCount((prev) => prev + 1);
+            setMessage("private選択");
+          }}
+          className={`px-4 py-3 border rounded-xl min-h-12 ${
+            workspace === "private"
+              ? "bg-white text-black border-white"
+              : "border-white"
+          }`}
+        >
+          private
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setWorkspace("business");
+            setCount((prev) => prev + 1);
+            setMessage("business選択");
+          }}
+          className={`px-4 py-3 border rounded-xl min-h-12 ${
+            workspace === "business"
+              ? "bg-white text-black border-white"
+              : "border-white"
+          }`}
+        >
+          business
+        </button>
+      </div>
+
+      <div className="text-sm text-zinc-400">
+        ボタンを押して、count と message が変われば React は正常。
+      </div>
+    </main>
+  );
+}
