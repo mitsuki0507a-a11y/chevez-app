@@ -1,0 +1,160 @@
+export type ParsedDateTime = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+};
+
+export type ParsedEventInput = {
+  raw: string;
+  title: string;
+  parsedDateTime: ParsedDateTime | null;
+};
+
+function addDays(base: Date, days: number) {
+  const d = new Date(base);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function getDefaultDateTime(base: Date) {
+  return {
+    year: base.getFullYear(),
+    month: base.getMonth() + 1,
+    day: base.getDate(),
+    hour: 9,
+    minute: 0,
+  };
+}
+
+function parseRelativeDate(text: string, now: Date) {
+  const todayWords = ["今日", "きょう"];
+  const tomorrowWords = ["明日", "あした"];
+  const dayAfterWords = ["明後日", "あさって"];
+  const dayAfter2Words = ["明々後日", "しあさって"];
+
+  if (todayWords.some((w) => text.includes(w))) return now;
+  if (tomorrowWords.some((w) => text.includes(w))) return addDays(now, 1);
+  if (dayAfterWords.some((w) => text.includes(w))) return addDays(now, 2);
+  if (dayAfter2Words.some((w) => text.includes(w))) return addDays(now, 3);
+
+  return null;
+}
+
+function parseSlashDate(text: string, now: Date) {
+  const match = text.match(/(\d{1,2})\/(\d{1,2})/);
+  if (!match) return null;
+
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+
+  return new Date(now.getFullYear(), month - 1, day);
+}
+
+function parseJapaneseDate(text: string, now: Date) {
+  const match = text.match(/(\d{1,2})月(\d{1,2})日/);
+  if (!match) return null;
+
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+
+  return new Date(now.getFullYear(), month - 1, day);
+}
+
+function parseTime(text: string) {
+  const colonMatch = text.match(/(\d{1,2}):(\d{2})/);
+  if (colonMatch) {
+    return {
+      hour: Number(colonMatch[1]),
+      minute: Number(colonMatch[2]),
+    };
+  }
+
+  const halfMatch = text.match(/(\d{1,2})時半/);
+  if (halfMatch) {
+    return {
+      hour: Number(halfMatch[1]),
+      minute: 30,
+    };
+  }
+
+  const hourMinuteMatch = text.match(/(\d{1,2})時(\d{1,2})分/);
+  if (hourMinuteMatch) {
+    return {
+      hour: Number(hourMinuteMatch[1]),
+      minute: Number(hourMinuteMatch[2]),
+    };
+  }
+
+  const ampmMatch = text.match(/(午前|午後)(\d{1,2})時/);
+  if (ampmMatch) {
+    let hour = Number(ampmMatch[2]);
+
+    if (ampmMatch[1] === "午後" && hour < 12) hour += 12;
+    if (ampmMatch[1] === "午前" && hour === 12) hour = 0;
+
+    return {
+      hour,
+      minute: 0,
+    };
+  }
+
+  const hourOnlyMatch = text.match(/(\d{1,2})時/);
+  if (hourOnlyMatch) {
+    return {
+      hour: Number(hourOnlyMatch[1]),
+      minute: 0,
+    };
+  }
+
+  if (text.includes("朝")) return { hour: 7, minute: 0 };
+  if (text.includes("昼")) return { hour: 12, minute: 0 };
+  if (text.includes("夕方")) return { hour: 17, minute: 0 };
+  if (text.includes("夜")) return { hour: 19, minute: 0 };
+
+  return null;
+}
+
+function cleanTitle(text: string) {
+  return text
+    .replace(/今日|きょう|明日|あした|明後日|あさって|明々後日|しあさって/g, "")
+    .replace(/\d{1,2}\/\d{1,2}/g, "")
+    .replace(/\d{1,2}月\d{1,2}日/g, "")
+    .replace(/午前\d{1,2}時|午後\d{1,2}時/g, "")
+    .replace(/\d{1,2}:\d{2}/g, "")
+    .replace(/\d{1,2}時半/g, "")
+    .replace(/\d{1,2}時\d{1,2}分/g, "")
+    .replace(/\d{1,2}時/g, "")
+    .replace(/朝|昼|夕方|夜/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function parseEventText(raw: string): ParsedEventInput {
+  const now = new Date();
+
+  const relativeDate = parseRelativeDate(raw, now);
+  const slashDate = parseSlashDate(raw, now);
+  const japaneseDate = parseJapaneseDate(raw, now);
+
+  const date = relativeDate ?? slashDate ?? japaneseDate ?? now;
+  const time = parseTime(raw);
+  const fallback = getDefaultDateTime(date);
+
+  const parsedDateTime: ParsedDateTime = {
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+    hour: time?.hour ?? fallback.hour,
+    minute: time?.minute ?? fallback.minute,
+  };
+
+  const title = cleanTitle(raw);
+
+  return {
+    raw,
+    title: title || "名称なし",
+    parsedDateTime,
+  };
+}
