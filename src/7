@@ -1,0 +1,705 @@
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+
+type Workspace = "private" | "business";
+
+type ParsedSchedule = {
+  title: string;
+  dateLabel: string;
+  timeLabel: string;
+  dateValue: string;
+  timeValue: string;
+};
+
+type EventItem = {
+  id: string;
+  rawText: string;
+  title: string;
+  workspace: Workspace;
+  createdAt: string;
+  dateValue: string;
+  timeValue: string;
+  dateLabel: string;
+  timeLabel: string;
+};
+
+type PreviewEvent = {
+  rawText: string;
+  title: string;
+  workspace: Workspace;
+  dateValue: string;
+  timeValue: string;
+  dateLabel: string;
+  timeLabel: string;
+};
+
+const EVENTS_COOKIE_KEY = "chavez_events_v8";
+const WORKSPACE_COOKIE_KEY = "chavez_workspace_v3";
+const PREVIEW_COOKIE_KEY = "chavez_preview_v3";
+
+function isWorkspace(value: string): value is Workspace {
+  return value === "private" || value === "business";
+}
+
+function createId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function formatCreatedAt(dateStr: string) {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${pad2(
+    d.getHours()
+  )}:${pad2(d.getMinutes())}`;
+}
+
+function formatDateValue(dateValue: string) {
+  const [y, m, d] = dateValue.split("-");
+  return `${y}/${Number(m)}/${Number(d)}`;
+}
+
+function formatTimeValue(timeValue: string) {
+  return timeValue;
+}
+
+function formatWeekday(date: Date) {
+  const names = ["日", "月", "火", "水", "木", "金", "土"];
+  return names[date.getDay()];
+}
+
+function toDateValue(date: Date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(
+    date.getDate()
+  )}`;
+}
+
+function addDays(base: Date, days: number) {
+  const d = new Date(base);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function getNextWeekday(base: Date, targetWeekday: number) {
+  const current = base.getDay();
+  let diff = targetWeekday - current;
+  if (diff <= 0) diff += 7;
+  return addDays(base, diff);
+}
+
+function getWeekdayFromText(text: string): number | null {
+  if (text.includes("日曜") || text.includes("日曜日")) return 0;
+  if (text.includes("月曜") || text.includes("月曜日")) return 1;
+  if (text.includes("火曜") || text.includes("火曜日")) return 2;
+  if (text.includes("水曜") || text.includes("水曜日")) return 3;
+  if (text.includes("木曜") || text.includes("木曜日")) return 4;
+  if (text.includes("金曜") || text.includes("金曜日")) return 5;
+  if (text.includes("土曜") || text.includes("土曜日")) return 6;
+  return null;
+}
+
+function parseDate(text: string) {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  const fullSlash = text.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (fullSlash) {
+    const year = Number(fullSlash[1]);
+    const month = Number(fullSlash[2]);
+    const day = Number(fullSlash[3]);
+    const date = new Date(year, month - 1, day);
+    return {
+      date,
+      matchedText: fullSlash[0],
+    };
+  }
+
+  const monthSlash = text.match(/(\d{1,2})\/(\d{1,2})/);
+  if (monthSlash) {
+    const month = Number(monthSlash[1]);
+    const day = Number(monthSlash[2]);
+    const date = new Date(now.getFullYear(), month - 1, day);
+    return {
+      date,
+      matchedText: monthSlash[0],
+    };
+  }
+
+  if (text.includes("明後日")) {
+    return { date: addDays(now, 2), matchedText: "明後日" };
+  }
+
+  if (text.includes("明日")) {
+    return { date: addDays(now, 1), matchedText: "明日" };
+  }
+
+  if (text.includes("今日")) {
+    return { date: now, matchedText: "今日" };
+  }
+
+  const weekday = getWeekdayFromText(text);
+  if (weekday !== null) {
+    if (text.includes("来週")) {
+      const next = getNextWeekday(addDays(now, 7), weekday);
+      return {
+        date: next,
+        matchedText: text.includes("月曜日")
+          ? "来週月曜日"
+          : text.includes("火曜日")
+          ? "来週火曜日"
+          : text.includes("水曜日")
+          ? "来週水曜日"
+          : text.includes("木曜日")
+          ? "来週木曜日"
+          : text.includes("金曜日")
+          ? "来週金曜日"
+          : text.includes("土曜日")
+          ? "来週土曜日"
+          : text.includes("日曜日")
+          ? "来週日曜日"
+          : `来週${["日", "月", "火", "水", "木", "金", "土"][weekday]}曜`,
+      };
+    }
+
+    const next = getNextWeekday(now, weekday);
+    return {
+      date: next,
+      matchedText: text.includes("月曜日")
+        ? "月曜日"
+        : text.includes("火曜日")
+        ? "火曜日"
+        : text.includes("水曜日")
+        ? "水曜日"
+        : text.includes("木曜日")
+        ? "木曜日"
+        : text.includes("金曜日")
+        ? "金曜日"
+        : text.includes("土曜日")
+        ? "土曜日"
+        : text.includes("日曜日")
+        ? "日曜日"
+        : `${["日", "月", "火", "水", "木", "金", "土"][weekday]}曜`,
+    };
+  }
+
+  return {
+    date: now,
+    matchedText: "",
+  };
+}
+
+function parseTime(text: string) {
+  const hhmm = text.match(/(\d{1,2}):(\d{2})/);
+  if (hhmm) {
+    const hour = Number(hhmm[1]);
+    const minute = Number(hhmm[2]);
+    return {
+      timeValue: `${pad2(hour)}:${pad2(minute)}`,
+      matchedText: hhmm[0],
+    };
+  }
+
+  const justHour = text.match(/(\d{1,2})時/);
+  if (justHour) {
+    const hour = Number(justHour[1]);
+    return {
+      timeValue: `${pad2(hour)}:00`,
+      matchedText: justHour[0],
+    };
+  }
+
+  if (text.includes("朝")) {
+    return {
+      timeValue: "07:00",
+      matchedText: "朝",
+    };
+  }
+
+  if (text.includes("昼")) {
+    return {
+      timeValue: "12:00",
+      matchedText: "昼",
+    };
+  }
+
+  if (text.includes("夜")) {
+    return {
+      timeValue: "19:00",
+      matchedText: "夜",
+    };
+  }
+
+  return {
+    timeValue: "09:00",
+    matchedText: "",
+  };
+}
+
+function cleanTitle(rawText: string, dateMatched: string, timeMatched: string) {
+  let title = rawText;
+
+  const removableWords = [
+    dateMatched,
+    timeMatched,
+    "今日",
+    "明日",
+    "明後日",
+    "来週",
+    "月曜",
+    "火曜",
+    "水曜",
+    "木曜",
+    "金曜",
+    "土曜",
+    "日曜",
+    "月曜日",
+    "火曜日",
+    "水曜日",
+    "木曜日",
+    "金曜日",
+    "土曜日",
+    "日曜日",
+  ].filter(Boolean);
+
+  for (const word of removableWords) {
+    title = title.replace(word, " ");
+  }
+
+  title = title
+    .replace(/\d{4}\/\d{1,2}\/\d{1,2}/g, " ")
+    .replace(/\d{1,2}\/\d{1,2}/g, " ")
+    .replace(/\d{1,2}:\d{2}/g, " ")
+    .replace(/\d{1,2}時/g, " ")
+    .replace(/朝|昼|夜/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return title || "名称なし";
+}
+
+function parseNaturalInput(rawText: string): ParsedSchedule {
+  const trimmed = rawText.trim();
+  const parsedDate = parseDate(trimmed);
+  const parsedTime = parseTime(trimmed);
+  const title = cleanTitle(trimmed, parsedDate.matchedText, parsedTime.matchedText);
+
+  const dateLabel = `${formatDateValue(toDateValue(parsedDate.date))}（${formatWeekday(
+    parsedDate.date
+  )}）`;
+
+  return {
+    title,
+    dateLabel,
+    timeLabel: formatTimeValue(parsedTime.timeValue),
+    dateValue: toDateValue(parsedDate.date),
+    timeValue: parsedTime.timeValue,
+  };
+}
+
+function isEventItem(value: unknown): value is EventItem {
+  if (!value || typeof value !== "object") return false;
+
+  const item = value as Record<string, unknown>;
+
+  return (
+    typeof item.id === "string" &&
+    typeof item.rawText === "string" &&
+    typeof item.title === "string" &&
+    (item.workspace === "private" || item.workspace === "business") &&
+    typeof item.createdAt === "string" &&
+    typeof item.dateValue === "string" &&
+    typeof item.timeValue === "string" &&
+    typeof item.dateLabel === "string" &&
+    typeof item.timeLabel === "string"
+  );
+}
+
+function isPreviewEvent(value: unknown): value is PreviewEvent {
+  if (!value || typeof value !== "object") return false;
+
+  const item = value as Record<string, unknown>;
+
+  return (
+    typeof item.rawText === "string" &&
+    typeof item.title === "string" &&
+    (item.workspace === "private" || item.workspace === "business") &&
+    typeof item.dateValue === "string" &&
+    typeof item.timeValue === "string" &&
+    typeof item.dateLabel === "string" &&
+    typeof item.timeLabel === "string"
+  );
+}
+
+function parseEventsCookie(raw: string | undefined): EventItem[] {
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isEventItem);
+  } catch {
+    return [];
+  }
+}
+
+function parsePreviewCookie(raw: string | undefined): PreviewEvent | null {
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return isPreviewEvent(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+async function setWorkspaceAction(formData: FormData) {
+  "use server";
+
+  const rawWorkspace = String(formData.get("workspace") ?? "");
+  const workspace: Workspace = isWorkspace(rawWorkspace) ? rawWorkspace : "private";
+
+  const cookieStore = await cookies();
+  cookieStore.set(WORKSPACE_COOKIE_KEY, workspace, {
+    httpOnly: false,
+    sameSite: "lax",
+    path: "/",
+  });
+
+  redirect("/");
+}
+
+async function openPreviewAction(formData: FormData) {
+  "use server";
+
+  const rawText = String(formData.get("rawText") ?? "").trim();
+  const rawWorkspace = String(formData.get("workspace") ?? "");
+  const workspace: Workspace = isWorkspace(rawWorkspace) ? rawWorkspace : "private";
+
+  const cookieStore = await cookies();
+
+  if (!rawText) {
+    cookieStore.delete(PREVIEW_COOKIE_KEY);
+    redirect("/");
+  }
+
+  const parsed = parseNaturalInput(rawText);
+
+  const preview: PreviewEvent = {
+    rawText,
+    title: parsed.title,
+    workspace,
+    dateValue: parsed.dateValue,
+    timeValue: parsed.timeValue,
+    dateLabel: parsed.dateLabel,
+    timeLabel: parsed.timeLabel,
+  };
+
+  cookieStore.set(PREVIEW_COOKIE_KEY, JSON.stringify(preview), {
+    httpOnly: false,
+    sameSite: "lax",
+    path: "/",
+  });
+
+  redirect("/");
+}
+
+async function savePreviewAction() {
+  "use server";
+
+  const cookieStore = await cookies();
+  const preview = parsePreviewCookie(cookieStore.get(PREVIEW_COOKIE_KEY)?.value);
+  const events = parseEventsCookie(cookieStore.get(EVENTS_COOKIE_KEY)?.value);
+
+  if (!preview) {
+    redirect("/");
+  }
+
+  const nextEvents: EventItem[] = [
+    {
+      id: createId(),
+      rawText: preview.rawText,
+      title: preview.title,
+      workspace: preview.workspace,
+      createdAt: new Date().toISOString(),
+      dateValue: preview.dateValue,
+      timeValue: preview.timeValue,
+      dateLabel: preview.dateLabel,
+      timeLabel: preview.timeLabel,
+    },
+    ...events,
+  ];
+
+  cookieStore.set(EVENTS_COOKIE_KEY, JSON.stringify(nextEvents), {
+    httpOnly: false,
+    sameSite: "lax",
+    path: "/",
+  });
+
+  cookieStore.delete(PREVIEW_COOKIE_KEY);
+  redirect("/");
+}
+
+async function cancelPreviewAction() {
+  "use server";
+
+  const cookieStore = await cookies();
+  cookieStore.delete(PREVIEW_COOKIE_KEY);
+  redirect("/");
+}
+
+async function deleteEventAction(formData: FormData) {
+  "use server";
+
+  const id = String(formData.get("id") ?? "");
+  const cookieStore = await cookies();
+  const events = parseEventsCookie(cookieStore.get(EVENTS_COOKIE_KEY)?.value);
+
+  const nextEvents = events.filter((event) => event.id !== id);
+
+  cookieStore.set(EVENTS_COOKIE_KEY, JSON.stringify(nextEvents), {
+    httpOnly: false,
+    sameSite: "lax",
+    path: "/",
+  });
+
+  redirect("/");
+}
+
+async function clearWorkspaceAction(formData: FormData) {
+  "use server";
+
+  const rawWorkspace = String(formData.get("workspace") ?? "");
+  const workspace: Workspace = isWorkspace(rawWorkspace) ? rawWorkspace : "private";
+
+  const cookieStore = await cookies();
+  const events = parseEventsCookie(cookieStore.get(EVENTS_COOKIE_KEY)?.value);
+
+  const nextEvents = events.filter((event) => event.workspace !== workspace);
+
+  cookieStore.set(EVENTS_COOKIE_KEY, JSON.stringify(nextEvents), {
+    httpOnly: false,
+    sameSite: "lax",
+    path: "/",
+  });
+
+  redirect("/");
+}
+
+export default async function Page() {
+  const cookieStore = await cookies();
+
+  const currentWorkspaceRaw =
+    cookieStore.get(WORKSPACE_COOKIE_KEY)?.value ?? "private";
+  const currentWorkspace: Workspace = isWorkspace(currentWorkspaceRaw)
+    ? currentWorkspaceRaw
+    : "private";
+
+  const events = parseEventsCookie(cookieStore.get(EVENTS_COOKIE_KEY)?.value);
+  const preview = parsePreviewCookie(cookieStore.get(PREVIEW_COOKIE_KEY)?.value);
+
+  const visibleEvents = events.filter(
+    (event) => event.workspace === currentWorkspace
+  );
+
+  return (
+    <main className="min-h-screen bg-black text-white">
+      <div className="mx-auto w-full max-w-3xl px-4 py-6">
+        <header className="mb-6">
+          <h1 className="text-2xl font-bold">チャベス</h1>
+          <p className="mt-2 text-sm text-zinc-400">
+            自然文登録 / 複数保存 / workspace分離
+          </p>
+        </header>
+
+        <section className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+          <div className="mb-3 text-sm text-zinc-400">workspace切替</div>
+
+          <div className="flex flex-wrap gap-3">
+            <form action={setWorkspaceAction}>
+              <input type="hidden" name="workspace" value="private" />
+              <button
+                type="submit"
+                className={`min-h-12 rounded-xl border px-4 py-3 text-sm font-medium ${
+                  currentWorkspace === "private"
+                    ? "border-white bg-white text-black"
+                    : "border-zinc-700 bg-zinc-900 text-white"
+                }`}
+              >
+                private
+              </button>
+            </form>
+
+            <form action={setWorkspaceAction}>
+              <input type="hidden" name="workspace" value="business" />
+              <button
+                type="submit"
+                className={`min-h-12 rounded-xl border px-4 py-3 text-sm font-medium ${
+                  currentWorkspace === "business"
+                    ? "border-white bg-white text-black"
+                    : "border-zinc-700 bg-zinc-900 text-white"
+                }`}
+              >
+                business
+              </button>
+            </form>
+          </div>
+
+          <div className="mt-4 text-sm text-zinc-400">
+            現在のworkspace:{" "}
+            <span className="font-semibold text-white">{currentWorkspace}</span>
+          </div>
+        </section>
+
+        <section className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+          <div className="mb-3 text-sm text-zinc-400">自然文入力</div>
+
+          <form
+            action={openPreviewAction}
+            className="flex flex-col gap-3 sm:flex-row"
+          >
+            <input
+              type="hidden"
+              name="workspace"
+              value={currentWorkspace}
+            />
+
+            <input
+              type="text"
+              name="rawText"
+              placeholder="例: 明日 バイト 18時"
+              className="min-h-12 flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-base text-white outline-none placeholder:text-zinc-500"
+            />
+
+            <button
+              type="submit"
+              className="min-h-12 rounded-xl border border-white px-5 py-3 text-sm font-medium text-white"
+            >
+              登録
+            </button>
+          </form>
+        </section>
+
+        {preview && (
+          <section className="mb-6 rounded-2xl border border-zinc-700 bg-zinc-950 p-4">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold">確認</h2>
+              <p className="mt-1 text-sm text-zinc-400">
+                解析した内容を確認
+              </p>
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-sm">
+              <div>
+                <div className="mb-1 text-zinc-400">元入力</div>
+                <div className="font-medium text-white">{preview.rawText}</div>
+              </div>
+
+              <div>
+                <div className="mb-1 text-zinc-400">タイトル</div>
+                <div className="font-medium text-white">{preview.title}</div>
+              </div>
+
+              <div>
+                <div className="mb-1 text-zinc-400">日付</div>
+                <div className="font-medium text-white">{preview.dateLabel}</div>
+              </div>
+
+              <div>
+                <div className="mb-1 text-zinc-400">時間</div>
+                <div className="font-medium text-white">{preview.timeLabel}</div>
+              </div>
+
+              <div>
+                <div className="mb-1 text-zinc-400">workspace</div>
+                <div className="font-medium text-white">{preview.workspace}</div>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <form action={savePreviewAction} className="flex-1">
+                <button
+                  type="submit"
+                  className="min-h-12 w-full rounded-xl border border-white bg-white px-4 py-3 text-sm font-medium text-black"
+                >
+                  保存
+                </button>
+              </form>
+
+              <form action={cancelPreviewAction} className="flex-1">
+                <button
+                  type="submit"
+                  className="min-h-12 w-full rounded-xl border border-zinc-600 px-4 py-3 text-sm font-medium text-white"
+                >
+                  キャンセル
+                </button>
+              </form>
+            </div>
+          </section>
+        )}
+
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">予定一覧</h2>
+            <div className="text-sm text-zinc-400">
+              {currentWorkspace} / {visibleEvents.length}件
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <form action={clearWorkspaceAction}>
+              <input type="hidden" name="workspace" value={currentWorkspace} />
+              <button
+                type="submit"
+                className="min-h-10 rounded-lg border border-red-500 px-4 py-2 text-sm text-red-400"
+              >
+                このworkspaceを全削除
+              </button>
+            </form>
+          </div>
+
+          {visibleEvents.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-zinc-700 p-4 text-sm text-zinc-400">
+              このworkspaceの予定はまだなし
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {visibleEvents.map((event) => (
+                <article
+                  key={event.id}
+                  className="rounded-xl border border-zinc-800 bg-zinc-900 p-4"
+                >
+                  <div className="mb-2 text-base font-semibold">
+                    {event.title}
+                  </div>
+
+                  <div className="space-y-1 text-sm text-zinc-400">
+                    <div>元入力: {event.rawText}</div>
+                    <div>日付: {event.dateLabel}</div>
+                    <div>時間: {event.timeLabel}</div>
+                    <div>workspace: {event.workspace}</div>
+                    <div>作成日時: {formatCreatedAt(event.createdAt)}</div>
+                  </div>
+
+                  <div className="mt-4">
+                    <form action={deleteEventAction}>
+                      <input type="hidden" name="id" value={event.id} />
+                      <button
+                        type="submit"
+                        className="min-h-10 rounded-lg border border-red-500 px-4 py-2 text-sm text-red-400"
+                      >
+                        削除
+                      </button>
+                    </form>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </main>
+  );
+}
