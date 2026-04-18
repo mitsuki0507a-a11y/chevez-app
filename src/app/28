@@ -1,0 +1,327 @@
+export type ParsedDateTime = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+};
+
+export type ParsedEventInput = {
+  raw: string;
+  title: string;
+  tags: string[];
+  parsedDateTime: ParsedDateTime | null;
+};
+
+function addDays(base: Date, days: number) {
+  const d = new Date(base);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function addWeeks(base: Date, weeks: number) {
+  return addDays(base, weeks * 7);
+}
+
+function addMonths(base: Date, months: number) {
+  const d = new Date(base);
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
+
+function addYears(base: Date, years: number) {
+  const d = new Date(base);
+  d.setFullYear(d.getFullYear() + years);
+  return d;
+}
+
+function getDefaultDateTime(base: Date) {
+  return {
+    year: base.getFullYear(),
+    month: base.getMonth() + 1,
+    day: base.getDate(),
+    hour: 9,
+    minute: 0,
+  };
+}
+
+function getWeekdayNumber(text: string): number | null {
+  if (text.includes("日曜") || text.includes("日曜日")) return 0;
+  if (text.includes("月曜") || text.includes("月曜日")) return 1;
+  if (text.includes("火曜") || text.includes("火曜日")) return 2;
+  if (text.includes("水曜") || text.includes("水曜日")) return 3;
+  if (text.includes("木曜") || text.includes("木曜日")) return 4;
+  if (text.includes("金曜") || text.includes("金曜日")) return 5;
+  if (text.includes("土曜") || text.includes("土曜日")) return 6;
+  return null;
+}
+
+function getThisWeekday(base: Date, target: number) {
+  const d = new Date(base);
+  const diff = target - d.getDay();
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+
+function getNextWeekday(base: Date, target: number, weekOffset: number) {
+  const d = new Date(base);
+  let diff = target - d.getDay();
+
+  if (diff <= 0) diff += 7;
+  diff += (weekOffset - 1) * 7;
+
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+
+function parseRelativeDate(text: string, now: Date) {
+  const todayWords = ["今日", "きょう"];
+  const tomorrowWords = ["明日", "あした"];
+  const dayAfterWords = ["明後日", "あさって"];
+  const dayAfter2Words = ["明々後日", "しあさって"];
+
+  if (dayAfter2Words.some((w) => text.includes(w))) return addDays(now, 3);
+  if (dayAfterWords.some((w) => text.includes(w))) return addDays(now, 2);
+  if (tomorrowWords.some((w) => text.includes(w))) return addDays(now, 1);
+  if (todayWords.some((w) => text.includes(w))) return now;
+
+  return null;
+}
+
+function parseWeekdayDate(text: string, now: Date) {
+  const weekday = getWeekdayNumber(text);
+  if (weekday === null) return null;
+
+  if (text.includes("再来週")) return getNextWeekday(now, weekday, 2);
+  if (text.includes("来週")) return getNextWeekday(now, weekday, 1);
+  if (text.includes("今週")) return getThisWeekday(now, weekday);
+
+  return null;
+}
+
+function parseOffsetDate(text: string, now: Date) {
+  const dayMatch = text.match(/(\d{1,3})日後/);
+  if (dayMatch) {
+    const days = Number(dayMatch[1]);
+    if (days >= 1 && days <= 100) return addDays(now, days);
+  }
+
+  const weekMatch = text.match(/(\d{1,2})週間後/);
+  if (weekMatch) {
+    const weeks = Number(weekMatch[1]);
+    if (weeks >= 1 && weeks <= 8) return addWeeks(now, weeks);
+  }
+
+  const monthMatch = text.match(/(\d{1,2})ヶ月後/);
+  if (monthMatch) {
+    const months = Number(monthMatch[1]);
+    if (months >= 1 && months <= 12) return addMonths(now, months);
+  }
+
+  const yearMatch = text.match(/(\d{1,2})年後/);
+  if (yearMatch) {
+    const years = Number(yearMatch[1]);
+    if (years >= 1 && years <= 2) return addYears(now, years);
+  }
+
+  if (text.includes("再来年")) return addYears(now, 2);
+  if (text.includes("来年")) return addYears(now, 1);
+  if (text.includes("今年")) return now;
+
+  return null;
+}
+
+function parseSlashDate(text: string, now: Date) {
+  const fullMatch = text.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (fullMatch) {
+    const year = Number(fullMatch[1]);
+    const month = Number(fullMatch[2]);
+    const day = Number(fullMatch[3]);
+    return new Date(year, month - 1, day);
+  }
+
+  const match = text.match(/(\d{1,2})\/(\d{1,2})/);
+  if (!match) return null;
+
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+
+  return new Date(now.getFullYear(), month - 1, day);
+}
+
+function parseJapaneseDate(text: string, now: Date) {
+  const fullMatch = text.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+  if (fullMatch) {
+    const year = Number(fullMatch[1]);
+    const month = Number(fullMatch[2]);
+    const day = Number(fullMatch[3]);
+    return new Date(year, month - 1, day);
+  }
+
+  const match = text.match(/(\d{1,2})月(\d{1,2})日/);
+  if (!match) return null;
+
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+
+  return new Date(now.getFullYear(), month - 1, day);
+}
+
+function parseTime(text: string) {
+  const colonMatch = text.match(/(\d{1,2}):(\d{2})/);
+  if (colonMatch) {
+    return {
+      hour: Number(colonMatch[1]),
+      minute: Number(colonMatch[2]),
+    };
+  }
+
+  const ampmHalfMatch = text.match(/(午前|午後)(\d{1,2})時半/);
+  if (ampmHalfMatch) {
+    let hour = Number(ampmHalfMatch[2]);
+
+    if (ampmHalfMatch[1] === "午後" && hour < 12) hour += 12;
+    if (ampmHalfMatch[1] === "午前" && hour === 12) hour = 0;
+
+    return {
+      hour,
+      minute: 30,
+    };
+  }
+
+  const halfMatch = text.match(/(\d{1,2})時半/);
+  if (halfMatch) {
+    return {
+      hour: Number(halfMatch[1]),
+      minute: 30,
+    };
+  }
+
+  const ampmHourMinuteMatch = text.match(/(午前|午後)(\d{1,2})時(\d{1,2})分/);
+  if (ampmHourMinuteMatch) {
+    let hour = Number(ampmHourMinuteMatch[2]);
+    const minute = Number(ampmHourMinuteMatch[3]);
+
+    if (ampmHourMinuteMatch[1] === "午後" && hour < 12) hour += 12;
+    if (ampmHourMinuteMatch[1] === "午前" && hour === 12) hour = 0;
+
+    return {
+      hour,
+      minute,
+    };
+  }
+
+  const hourMinuteMatch = text.match(/(\d{1,2})時(\d{1,2})分/);
+  if (hourMinuteMatch) {
+    return {
+      hour: Number(hourMinuteMatch[1]),
+      minute: Number(hourMinuteMatch[2]),
+    };
+  }
+
+  const ampmMatch = text.match(/(午前|午後)(\d{1,2})時/);
+  if (ampmMatch) {
+    let hour = Number(ampmMatch[2]);
+
+    if (ampmMatch[1] === "午後" && hour < 12) hour += 12;
+    if (ampmMatch[1] === "午前" && hour === 12) hour = 0;
+
+    return {
+      hour,
+      minute: 0,
+    };
+  }
+
+  const hourOnlyMatch = text.match(/(\d{1,2})時/);
+  if (hourOnlyMatch) {
+    return {
+      hour: Number(hourOnlyMatch[1]),
+      minute: 0,
+    };
+  }
+
+  if (text.includes("朝")) return { hour: 7, minute: 0 };
+  if (text.includes("昼")) return { hour: 12, minute: 0 };
+  if (text.includes("夕方")) return { hour: 17, minute: 0 };
+  if (text.includes("夜")) return { hour: 19, minute: 0 };
+
+  return null;
+}
+
+function extractTags(text: string) {
+  const tags: string[] = [];
+
+  if (text.includes("重要")) tags.push("重要");
+  if (text.includes("仕事")) tags.push("仕事");
+  if (text.includes("私用")) tags.push("私用");
+  if (text.includes("会議")) tags.push("会議");
+  if (text.includes("バイト")) tags.push("バイト");
+
+  return tags;
+}
+
+function cleanTitle(text: string) {
+  return text
+    .replace(/今日|きょう|明日|あした|明後日|あさって|明々後日|しあさって/g, "")
+    .replace(/今年|来年|再来年/g, "")
+    .replace(/今週|来週|再来週/g, "")
+    .replace(/日曜|日曜日|月曜|月曜日|火曜|火曜日|水曜|水曜日|木曜|木曜日|金曜|金曜日|土曜|土曜日/g, "")
+    .replace(/\d{1,3}日後/g, "")
+    .replace(/\d{1,2}週間後/g, "")
+    .replace(/\d{1,2}ヶ月後/g, "")
+    .replace(/\d{1,2}年後/g, "")
+    .replace(/\d{4}\/\d{1,2}\/\d{1,2}/g, "")
+    .replace(/\d{1,2}\/\d{1,2}/g, "")
+    .replace(/\d{4}年\d{1,2}月\d{1,2}日/g, "")
+    .replace(/\d{1,2}月\d{1,2}日/g, "")
+    .replace(/午前\d{1,2}時半|午後\d{1,2}時半/g, "")
+    .replace(/午前\d{1,2}時\d{1,2}分|午後\d{1,2}時\d{1,2}分/g, "")
+    .replace(/午前\d{1,2}時|午後\d{1,2}時/g, "")
+    .replace(/\d{1,2}:\d{2}/g, "")
+    .replace(/\d{1,2}時半/g, "")
+    .replace(/\d{1,2}時\d{1,2}分/g, "")
+    .replace(/\d{1,2}時/g, "")
+    .replace(/朝|昼|夕方|夜/g, "")
+    .replace(/重要|仕事|私用|会議|バイト/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+export function parseEventText(raw: string): ParsedEventInput {
+  const now = new Date();
+
+  const relativeDate = parseRelativeDate(raw, now);
+  const weekdayDate = parseWeekdayDate(raw, now);
+  const offsetDate = parseOffsetDate(raw, now);
+  const slashDate = parseSlashDate(raw, now);
+  const japaneseDate = parseJapaneseDate(raw, now);
+
+  const date =
+    relativeDate ??
+    weekdayDate ??
+    offsetDate ??
+    slashDate ??
+    japaneseDate ??
+    now;
+
+  const time = parseTime(raw);
+  const fallback = getDefaultDateTime(date);
+  const tags = extractTags(raw);
+
+  const parsedDateTime: ParsedDateTime = {
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+    hour: time?.hour ?? fallback.hour,
+    minute: time?.minute ?? fallback.minute,
+  };
+
+  const title = cleanTitle(raw);
+
+  return {
+    raw,
+    title: title || "名称なし",
+    tags,
+    parsedDateTime,
+  };
+}
