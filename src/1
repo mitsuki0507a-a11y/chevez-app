@@ -1,0 +1,78 @@
+"use client";
+
+import { useState } from "react";
+
+type Workspace = "private" | "business";
+
+export default function Page() {
+  const [workspace, setWorkspace] = useState<Workspace>("private");
+  const [input, setInput] = useState("");
+  const [preview, setPreview] = useState<string | null>(null);
+  const [events, setEvents] = useState<string[]>([]);
+
+  const handlePreview = () => {
+    if (!input.trim()) return;
+    setPreview(input);
+  };
+
+  const handleSave = () => {
+    if (!preview) return;
+    setEvents((prev) => [...prev, `${workspace}: ${preview}`]);
+    setPreview(null);
+    setInput("");
+  };
+
+  return (
+    <div className="min-h-screen bg-black text-white p-4 space-y-4">
+      <h1 className="text-xl font-bold">チャベス</h1>
+
+      <div className="flex gap-2">
+        <button
+          onClick={() => setWorkspace("private")}
+          className={`px-4 py-2 border ${
+            workspace === "private" ? "bg-white text-black" : ""
+          }`}
+        >
+          private
+        </button>
+
+        <button
+          onClick={() => setWorkspace("business")}
+          className={`px-4 py-2 border ${
+            workspace === "business" ? "bg-white text-black" : ""
+          }`}
+        >
+          business
+        </button>
+      </div>
+
+      <input
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        placeholder="予定を入力"
+        className="w-full p-2 text-black"
+      />
+
+      <button onClick={handlePreview} className="px-4 py-2 border">
+        登録
+      </button>
+
+      {preview && (
+        <div className="border p-4 space-y-2">
+          <div>確認: {preview}</div>
+          <button onClick={handleSave} className="px-4 py-2 border">
+            保存
+          </button>
+        </div>
+      )}
+
+      <div>
+        <h2>予定一覧</h2>
+        {events.length === 0 && <div>なし</div>}
+        {events.map((e, i) => (
+          <div key={i}>{e}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
