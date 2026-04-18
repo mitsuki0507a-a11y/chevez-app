@@ -1,0 +1,271 @@
+"use client";
+
+import { FormEvent, useEffect, useMemo, useState } from "react";
+
+type Workspace = "private" | "business";
+
+type EventItem = {
+  id: string;
+  title: string;
+  workspace: Workspace;
+  createdAt: string;
+};
+
+type PreviewEvent = {
+  title: string;
+  workspace: Workspace;
+};
+
+const STORAGE_KEY = "chaves_events_v3";
+
+function createId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(
+    d.getHours()
+  ).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+export default function Page() {
+  const [workspace, setWorkspace] = useState<Workspace>("private");
+  const [input, setInput] = useState("");
+  const [preview, setPreview] = useState<PreviewEvent | null>(null);
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [mounted, setMounted] = useState(false);
+  const [message, setMessage] = useState("待機中");
+
+  useEffect(() => {
+    setMounted(true);
+
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw) as EventItem[];
+      if (Array.isArray(parsed)) {
+        setEvents(parsed);
+      }
+    } catch {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+  }, [events, mounted]);
+
+  const visibleEvents = useMemo(() => {
+    return events.filter((event) => event.workspace === workspace);
+  }, [events, workspace]);
+
+  const handleWorkspaceClick = (nextWorkspace: Workspace) => {
+    setWorkspace(nextWorkspace);
+    setMessage(`workspace変更: ${nextWorkspace}`);
+  };
+
+  const handleOpenPreview = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    const trimmed = input.trim();
+
+    if (!trimmed) {
+      setMessage("入力空");
+      return;
+    }
+
+    setPreview({
+      title: trimmed,
+      workspace,
+    });
+
+    setMessage("確認表示中");
+  };
+
+  const handleSave = () => {
+    if (!preview) {
+      setMessage("previewなし");
+      return;
+    }
+
+    const newEvent: EventItem = {
+      id: createId(),
+      title: preview.title,
+      workspace: preview.workspace,
+      createdAt: new Date().toISOString(),
+    };
+
+    setEvents((prev) => [newEvent, ...prev]);
+    setPreview(null);
+    setInput("");
+    setMessage("保存完了");
+  };
+
+  const handleCancel = () => {
+    setPreview(null);
+    setMessage("キャンセル");
+  };
+
+  const handleDelete = (id: string) => {
+    setEvents((prev) => prev.filter((event) => event.id !== id));
+    setMessage("削除完了");
+  };
+
+  return (
+    <main className="min-h-screen bg-black text-white">
+      <div className="mx-auto w-full max-w-3xl px-4 py-6">
+        <header className="mb-6">
+          <h1 className="text-2xl font-bold">チャベス</h1>
+          <p className="mt-2 text-sm text-zinc-400">workspaceごとに予定を管理</p>
+          <p className="mt-1 text-sm text-zinc-500">status: {message}</p>
+        </header>
+
+        <section className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+          <div className="mb-3 text-sm text-zinc-400">workspace切替</div>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => handleWorkspaceClick("private")}
+              className={`min-h-12 rounded-xl border px-4 py-3 text-sm font-medium transition active:scale-[0.98] ${
+                workspace === "private"
+                  ? "border-white bg-white text-black"
+                  : "border-zinc-700 bg-zinc-900 text-white"
+              }`}
+            >
+              private
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleWorkspaceClick("business")}
+              className={`min-h-12 rounded-xl border px-4 py-3 text-sm font-medium transition active:scale-[0.98] ${
+                workspace === "business"
+                  ? "border-white bg-white text-black"
+                  : "border-zinc-700 bg-zinc-900 text-white"
+              }`}
+            >
+              business
+            </button>
+          </div>
+
+          <div className="mt-4 text-sm text-zinc-400">
+            現在のworkspace:{" "}
+            <span className="font-semibold text-white">{workspace}</span>
+          </div>
+        </section>
+
+        <section className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+          <div className="mb-3 text-sm text-zinc-400">予定入力</div>
+
+          <form
+            onSubmit={handleOpenPreview}
+            className="flex flex-col gap-3 sm:flex-row"
+          >
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="予定を入力"
+              className="min-h-12 flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-base text-white outline-none placeholder:text-zinc-500"
+            />
+
+            <button
+              type="submit"
+              className="min-h-12 rounded-xl border border-white px-5 py-3 text-sm font-medium text-white transition hover:bg-white hover:text-black active:scale-[0.98]"
+            >
+              登録
+            </button>
+          </form>
+        </section>
+
+        {preview && (
+          <section className="mb-6 rounded-2xl border border-zinc-700 bg-zinc-950 p-4">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold">確認</h2>
+              <p className="mt-1 text-sm text-zinc-400">
+                この内容で保存するか確認
+              </p>
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-sm">
+              <div>
+                <div className="mb-1 text-zinc-400">タイトル</div>
+                <div className="font-medium text-white">{preview.title}</div>
+              </div>
+
+              <div>
+                <div className="mb-1 text-zinc-400">workspace</div>
+                <div className="font-medium text-white">{preview.workspace}</div>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={handleSave}
+                className="min-h-12 flex-1 rounded-xl border border-white bg-white px-4 py-3 text-sm font-medium text-black transition hover:opacity-90 active:scale-[0.98]"
+              >
+                保存
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="min-h-12 flex-1 rounded-xl border border-zinc-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-zinc-800 active:scale-[0.98]"
+              >
+                キャンセル
+              </button>
+            </div>
+          </section>
+        )}
+
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">予定一覧</h2>
+            <span className="text-sm text-zinc-400">
+              {workspace} / {visibleEvents.length}件
+            </span>
+          </div>
+
+          {visibleEvents.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-zinc-700 p-4 text-sm text-zinc-400">
+              このworkspaceの予定はまだなし
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {visibleEvents.map((event) => (
+                <article
+                  key={event.id}
+                  className="rounded-xl border border-zinc-800 bg-zinc-900 p-4"
+                >
+                  <div className="mb-2 text-base font-semibold">
+                    {event.title}
+                  </div>
+
+                  <div className="space-y-1 text-sm text-zinc-400">
+                    <div>workspace: {event.workspace}</div>
+                    <div>作成日時: {formatDate(event.createdAt)}</div>
+                  </div>
+
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(event.id)}
+                      className="min-h-10 rounded-lg border border-red-500 px-4 py-2 text-sm text-red-400 transition hover:bg-red-500 hover:text-white active:scale-[0.98]"
+                    >
+                      削除
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </main>
+  );
+}
